@@ -55,6 +55,7 @@ def get_dataloader(
     dataset_configs: Dict[str, Any],
     tokenizer=None,
     positions=None,
+    infinite: bool = True,
 ):
     vision_input_type = args.vision_input_type
     image_res = args.image_res
@@ -83,6 +84,7 @@ def get_dataloader(
         seed=args.seed,
         preprocessors=[preprocessor],
         dataset_configs=dataset_configs,
+        infinite=infinite,
     )
 
     # Create the dataloader

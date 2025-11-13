@@ -235,6 +235,7 @@ class IterativeJSONLDataset(IterableDataset):
         dataset_name: str,
         seed: int = 0,
         dataset_configs: Dict[str, Any] = {},
+        infinite: bool = True,
     ):
         self._dataset_name = dataset_name
         self._seed = seed
@@ -243,6 +244,8 @@ class IterativeJSONLDataset(IterableDataset):
         self.global_rank = global_rank
         self.world_size = world_size
         self.data_path = self._dataset_conf.annotation
+        self.jsonl_iterator = None
+        self.infinite = infinite
 
     def worker_init(self, worker_id, num_workers):
         dataloader_rank = self.global_rank * num_workers + worker_id
@@ -252,14 +255,14 @@ class IterativeJSONLDataset(IterableDataset):
                 self.data_path,
                 world_size=dataloader_world_size,
                 world_rank=dataloader_rank,
-                infinite=True,
+                infinite=self.infinite,
             )
         else:
             self.jsonl_iterator = JSONLDirectoryIterator(
                 dirpath=self.data_path,
                 world_size=dataloader_world_size,
                 world_rank=dataloader_rank,
-                infinite=True,
+                infinite=self.infinite,
             )
         if worker_id == 0:
             logger.info(
@@ -268,6 +271,9 @@ class IterativeJSONLDataset(IterableDataset):
             )
 
     def state_dict(self):
+        if not hasattr(self, 'jsonl_iterator') or self.jsonl_iterator is None:  # ← THÊM CHECK
+            return {"single_jsonl_position": None}
+        
         pos = self.jsonl_iterator.get_position()
         if isinstance(pos, Dict):
             return pos
@@ -282,9 +288,13 @@ class IterativeJSONLDataset(IterableDataset):
         logger.info(f"JSONLDataset {self._dataset_name} resuming from {state_dict}.")
 
     def __iter__(self):
+        if self.jsonl_iterator is None:  # THÊM CHECK
+            self.worker_init(0, 1)
         return self
 
     def __next__(self):
+        if self.jsonl_iterator is None:  # THÊM CHECK (phòng trường hợp)
+            self.worker_init(0, 1)
         return next(self.jsonl_iterator)
 
 
@@ -297,6 +307,7 @@ class DatasetMixer(IterableDataset):
         seed: int = 0,
         preprocessors: List[Callable] = [],
         dataset_configs: Dict[str, Any] = {},
+        infinite: bool = True,
     ):
         super().__init__()
 
@@ -327,6 +338,7 @@ class DatasetMixer(IterableDataset):
                 dataset_name=ds,
                 seed=seed,
                 dataset_configs=dataset_configs,
+                infinite=infinite,
             )
             _preprocessors = [
                 p(dataset_config=dataset_configs[ds]) for p in preprocessors

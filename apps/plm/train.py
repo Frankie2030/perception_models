@@ -297,6 +297,7 @@ def train(args: TrainArgs):
             dp_world_size=dp_degree,
             dataset_configs=DATASET_CONFIGS,
             tokenizer=tokenizer,
+            infinite=False,  # Set to False to load data only once
         )
 
         # Initialize the training state
